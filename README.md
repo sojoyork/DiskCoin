@@ -13,12 +13,16 @@ Balance Check: One can verify the balance of his or her present DiskCoin.
 
 1. Verify that [Rust](https://www.rust-lang.org/tools/install) is installed on your machine.
 
-2. Clone the repository: ```bash git clone https://github.com/sojoyork/DiskCoin.git
+2. Clone the repository: ```bash
+git clone https://github.com/sojoyork/DiskCoin.git
 cd DiskCoin```
 
 4. Build the project: ```bash
-cargo build```
+cargo build
+```
 
-5. run it:```
-cargo run```
-6. enjoy! `Ctrl+C` to exit
+6. run it:
+```
+cargo run
+```
+7. enjoy! `Ctrl+C` to exit
