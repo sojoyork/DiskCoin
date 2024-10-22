@@ -37,7 +37,7 @@ impl Wallet {
     pub fn airdrop(&mut self) -> Result<u32, &'static str> {
         let now = Utc::now();
         let one_week = chrono::Duration::weeks(1);
-        
+
         // Check if airdrop can occur
         if let Some(last) = self.last_airdrop {
             if now - last < one_week {
