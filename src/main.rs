@@ -36,18 +36,42 @@ impl Wallet {
     pub fn airdrop(&mut self) -> u32 {
         let amount: u32 = rand::thread_rng().gen_range(0..=90);
         self.balance += amount;
+        self.save().expect("Failed to save wallet after airdrop");
         amount
     }
-    
-    pub fn mine(&mut self) -> u32 {
-        // Simulate mining
-        let amount = 1; // Fixed amount for simplicity
-        self.balance += amount;
-        amount
+
+    pub fn mine(&mut self, difficulty: usize) -> u32 {
+        // Simulate mining with proof of work
+        let mut nonce = 0;
+        let prefix = "0".repeat(difficulty);
+        let mut found = false;
+
+        while !found {
+            let input = format!("{}{}", self.id, nonce); // Unique input for the wallet
+            let hash = Sha256::digest(input.as_bytes());
+            let hash_hex = format!("{:x}", hash);
+
+            if hash_hex.starts_with(&prefix) {
+                found = true; // Successful mining
+                let amount = 1; // Reward for mining
+                self.balance += amount;
+                self.save().expect("Failed to save wallet after mining");
+                return amount; // Return the amount mined
+            }
+            nonce += 1;
+        }
+
+        0 // Should not reach here
     }
 
     pub fn get_balance(&self) -> u32 {
         self.balance
+    }
+
+    fn save(&self) -> Result<(), std::io::Error> {
+        let file = File::create("wallet.json")?;
+        serde_json::to_writer(file, self)?;
+        Ok(())
     }
 }
 
@@ -85,20 +109,24 @@ fn main() {
     println!("Blockchain initialized.");
 
     loop {
-        println!("Type 'mine' to mine DiskCoin or 'airdrop' for a random amount of DiskCoin (0-90):");
+        println!("Type 'mine', 'airdrop', 'show', or 'balance':");
         let mut input = String::new();
         io::stdin().read_line(&mut input).expect("Failed to read line");
 
         match input.trim() {
             "mine" => {
-                let amount = wallet.mine();
+                let difficulty = 4; // Example difficulty level (4 leading zeros)
+                let amount = wallet.mine(difficulty);
                 println!("You mined {} DiskCoin! Current balance: {}", amount, wallet.get_balance());
             }
             "airdrop" => {
                 let amount = wallet.airdrop();
                 println!("You received {} DiskCoin from airdrop! Current balance: {}", amount, wallet.get_balance());
             }
-            _ => println!("Unknown command. Please type 'mine' or 'airdrop'."),
+            "show" | "balance" => {
+                println!("Current balance: {}", wallet.get_balance());
+            }
+            _ => println!("Unknown command. Please type 'mine', 'airdrop', 'show', or 'balance'."),
         }
     }
 }
