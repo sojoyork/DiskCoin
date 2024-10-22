@@ -17,9 +17,7 @@ Balance Check: One can verify the balance of his or her present DiskCoin.
 git clone https://github.com/sojoyork/DiskCoin.git
 cd DiskCoin```
 
-4. Build the project: ```bash
-cargo build
-```
+4. Build the project: ```cargo build```
 
 6. run it:
 ```
