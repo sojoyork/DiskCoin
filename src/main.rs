@@ -1,86 +1,104 @@
-mod blockandblockchain;
-mod miner;
-mod wallet;
+use std::fs::{File, OpenOptions};
+use std::io::{self, Read, Write};
+use std::thread;
+use rand::Rng;
+use sha2::{Sha256, Digest};
+use serde::{Serialize, Deserialize};
 
-use blockandblockchain::Blockchain; // Removed Block
-use miner::Miner; // Ensure this is included
-use wallet::Wallet;
-use std::io;
-use tokio::net::TcpStream;
-use tokio::io::{AsyncWriteExt, BufWriter};
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Wallet {
+    id: String,
+    balance: u32,
+}
 
-#[tokio::main]
-async fn main() {
-    // Create or load wallet
-    let wallet_result = Wallet::load();
-    let wallet = match wallet_result {
-        Ok(wallet) => {
-            println!("Logged in with Wallet ID: {}", wallet.id);
-            wallet
-        }
-        Err(_) => {
-            Wallet::create().expect("Failed to create wallet");
-            Wallet::load().expect("Failed to load wallet")
-        }
-    };
+impl Wallet {
+    pub fn load() -> Result<Wallet, std::io::Error> {
+        // Load wallet from file
+        let file = File::open("wallet.json")?;
+        let wallet: Wallet = serde_json::from_reader(file)?;
+        Ok(wallet)
+    }
 
-    // Initialize blockchain and miner
-    let blockchain = Blockchain::new();
-    let mut miner = Miner::new(blockchain); // Create a Miner instance
+    pub fn create() -> Result<Wallet, std::io::Error> {
+        let id = Self::generate_wallet_id();
+        let wallet = Wallet { id, balance: 0 };
+        let file = File::create("wallet.json")?;
+        serde_json::to_writer(file, &wallet)?;
+        Ok(wallet)
+    }
 
-    println!("Welcome to DiskCoin (DSCN)!");
+    fn generate_wallet_id() -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(format!("{}", rand::random::<u64>()));
+        format!("{:x}", hasher.finalize())
+    }
 
-    loop {
-        println!("\nEnter command (mine/show/send/exit): ");
-        let mut command = String::new();
-        io::stdin().read_line(&mut command).expect("Failed to read line");
-        let command = command.trim();
+    pub fn airdrop(&mut self) -> u32 {
+        let amount: u32 = rand::thread_rng().gen_range(0..=90);
+        self.balance += amount;
+        amount
+    }
+    
+    pub fn mine(&mut self) -> u32 {
+        // Simulate mining
+        let amount = 1; // Fixed amount for simplicity
+        self.balance += amount;
+        amount
+    }
 
-        match command {
-            "mine" => {
-                println!("Enter data for the new block: ");
-                let mut data = String::new();
-                io::stdin().read_line(&mut data).expect("Failed to read line");
-                miner.mine(data.trim().to_string()); // Call mine on the instance
-                println!("Block mined!");
-            }
-            "show" => {
-                miner.blockchain.show_chain(); // Call show_chain on the instance
-            }
-            "send" => {
-                println!("Enter recipient ID: ");
-                let mut recipient_id = String::new();
-                io::stdin().read_line(&mut recipient_id).expect("Failed to read line");
-
-                println!("Enter amount to send: ");
-                let mut amount_str = String::new();
-                io::stdin().read_line(&mut amount_str).expect("Failed to read line");
-                let amount: f64 = amount_str.trim().parse().expect("Invalid amount");
-
-                // Send data
-                if let Err(e) = send_data(recipient_id.trim(), &wallet.id, amount).await {
-                    println!("Failed to send data: {}", e);
-                }
-            }
-            "exit" => break,
-            _ => println!("Unknown command!"),
-        }
+    pub fn get_balance(&self) -> u32 {
+        self.balance
     }
 }
 
-// A function to send data over TCP
-async fn send_data(to_id: &str, from_id: &str, amount: f64) -> Result<(), Box<dyn std::error::Error>> {
-    // Construct the message
-    let message = format!("Sent-dscn {}\nto: {}\nfrom: {}", amount, to_id, from_id);
+#[derive(Clone)]
+pub struct Block {
+    index: u32,
+    // Add other fields as needed
+}
 
-    // Establish a connection to the recipient's address
-    let recipient_ip = "127.0.0.1:8080"; // Replace with the actual recipient's address
-    let stream = TcpStream::connect(recipient_ip).await?;
+#[derive(Clone)]
+pub struct Blockchain {
+    chain: Vec<Block>,
+}
 
-    let mut writer = BufWriter::new(stream);
-    writer.write_all(message.as_bytes()).await?;
-    writer.flush().await?;
+impl Blockchain {
+    pub fn new() -> Blockchain {
+        Blockchain { chain: vec![] }
+    }
 
-    println!("Data sent: {}", message);
-    Ok(())
+    pub fn get_chain(&self) -> &Vec<Block> {
+        &self.chain
+    }
+}
+
+fn main() {
+    // Load or create the wallet
+    let mut wallet = Wallet::load().unwrap_or_else(|err| {
+        println!("Failed to load wallet: {}", err);
+        Wallet::create().expect("Failed to create a new wallet")
+    });
+    println!("Wallet loaded with ID: {:?}, Current balance: {}", wallet.id, wallet.get_balance());
+
+    // Initialize the blockchain
+    let blockchain = Blockchain::new();
+    println!("Blockchain initialized.");
+
+    loop {
+        println!("Type 'mine' to mine DiskCoin or 'airdrop' for a random amount of DiskCoin (0-90):");
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).expect("Failed to read line");
+
+        match input.trim() {
+            "mine" => {
+                let amount = wallet.mine();
+                println!("You mined {} DiskCoin! Current balance: {}", amount, wallet.get_balance());
+            }
+            "airdrop" => {
+                let amount = wallet.airdrop();
+                println!("You received {} DiskCoin from airdrop! Current balance: {}", amount, wallet.get_balance());
+            }
+            _ => println!("Unknown command. Please type 'mine' or 'airdrop'."),
+        }
+    }
 }
