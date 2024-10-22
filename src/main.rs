@@ -1,15 +1,14 @@
-use std::fs::File;
-use std::io::{self, Read}; // Removed Write and thread as they are unused
+use std::fs::{File, OpenOptions};
+use std::io::{self, Read, Write};
 use rand::Rng;
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Wallet {
     id: String,
     balance: u32,
-    last_airdrop: Option<DateTime<Utc>>, // Field to track the last airdrop
+    last_airdrop: Option<u64>, // Timestamp for last airdrop
 }
 
 impl Wallet {
@@ -22,7 +21,7 @@ impl Wallet {
 
     pub fn create() -> Result<Wallet, std::io::Error> {
         let id = Self::generate_wallet_id();
-        let wallet = Wallet { id, balance: 0, last_airdrop: None }; // Initialize last_airdrop to None
+        let wallet = Wallet { id, balance: 0, last_airdrop: None };
         let file = File::create("wallet.json")?;
         serde_json::to_writer(file, &wallet)?;
         Ok(wallet)
@@ -34,44 +33,39 @@ impl Wallet {
         format!("{:x}", hasher.finalize())
     }
 
-    pub fn airdrop(&mut self) -> Result<u32, &'static str> {
-        let now = Utc::now();
-        let one_week = chrono::Duration::weeks(1);
-
-        // Check if airdrop can occur
-        if let Some(last) = self.last_airdrop {
-            if now - last < one_week {
-                return Err("Airdrop can only be claimed once a week.");
-            }
+    pub fn airdrop(&mut self) -> u32 {
+        let current_time = chrono::Utc::now().timestamp() as u64;
+        if self.last_airdrop.is_none() || current_time - self.last_airdrop.unwrap() >= 604800 { // 1 week in seconds
+            let amount: u32 = rand::thread_rng().gen_range(0..=90);
+            self.balance += amount;
+            self.last_airdrop = Some(current_time);
+            self.save().expect("Failed to save wallet after airdrop");
+            amount
+        } else {
+            println!("Airdrop can only be claimed once a week.");
+            0
         }
-
-        let amount: u32 = rand::thread_rng().gen_range(0..=90);
-        self.balance += amount;
-        self.last_airdrop = Some(now); // Update last airdrop time
-        self.save().expect("Failed to save wallet after airdrop");
-        Ok(amount)
     }
 
-    pub fn mine(&mut self, difficulty: usize) -> u32 {
-        // Simulate mining with proof of work
+    pub fn mine(&mut self) -> u32 {
         let mut nonce = 0;
-        let prefix = "0".repeat(difficulty);
+        let difficulty = 4; // Difficulty level (number of leading zeros)
+        let target = "0000"; // Target hash prefix for difficulty
 
-        while nonce < u32::MAX {
-            let input = format!("{}{}", self.id, nonce); // Unique input for the wallet
-            let hash = Sha256::digest(input.as_bytes());
-            let hash_hex = format!("{:x}", hash);
+        loop {
+            // Create a string to hash
+            let block_data = format!("{}{}", self.id, nonce);
+            let hash = format!("{:x}", Sha256::digest(block_data.as_bytes()));
 
-            if hash_hex.starts_with(&prefix) {
-                let amount = 1; // Reward for mining
-                self.balance += amount;
+            // Check if the hash meets the difficulty
+            if &hash[..difficulty] == target {
+                self.balance += 1; // Increase balance for a successful mine
                 self.save().expect("Failed to save wallet after mining");
-                return amount; // Return the amount mined
+                println!("Successfully mined! Nonce: {}, Hash: {}", nonce, hash);
+                return 1; // Return the mined amount
             }
-            nonce += 1;
+            nonce += 1; // Increment nonce for next attempt
         }
-
-        0 // Should not reach here
     }
 
     pub fn get_balance(&self) -> u32 {
@@ -114,6 +108,10 @@ fn main() {
     });
     println!("Wallet loaded with ID: {:?}, Current balance: {}", wallet.id, wallet.get_balance());
 
+    // Initialize the blockchain
+    let blockchain = Blockchain::new();
+    println!("Blockchain initialized.");
+
     loop {
         println!("Type 'mine', 'airdrop', 'show', or 'balance':");
         let mut input = String::new();
@@ -121,19 +119,12 @@ fn main() {
 
         match input.trim() {
             "mine" => {
-                let difficulty = 4; // Example difficulty level (4 leading zeros)
-                let amount = wallet.mine(difficulty);
+                let amount = wallet.mine();
                 println!("You mined {} DiskCoin! Current balance: {}", amount, wallet.get_balance());
             }
             "airdrop" => {
-                match wallet.airdrop() {
-                    Ok(amount) => {
-                        println!("You received {} DiskCoin from airdrop! Current balance: {}", amount, wallet.get_balance());
-                    }
-                    Err(e) => {
-                        println!("{}", e); // Print error message if airdrop is not allowed
-                    }
-                }
+                let amount = wallet.airdrop();
+                println!("You received {} DiskCoin from airdrop! Current balance: {}", amount, wallet.get_balance());
             }
             "show" | "balance" => {
                 println!("Current balance: {}", wallet.get_balance());
