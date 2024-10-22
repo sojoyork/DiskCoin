@@ -15,9 +15,10 @@ Balance Check: One can verify the balance of his or her present DiskCoin.
 
 2. Clone the repository: ```bash git clone https://github.com/sojoyork/DiskCoin.git
 cd DiskCoin```
-3. Build the project: ```bash
-cargo build
-```
-4. run it: ```bash
+
+4. Build the project: ```bash
+cargo build```
+
+5. run it:```
 cargo run```
-5. enjoy! `Ctrl+C` to exit
+6. enjoy! `Ctrl+C` to exit
